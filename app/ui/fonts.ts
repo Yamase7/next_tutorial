@@ -1,5 +1,8 @@
 // Interフォントをインポート
-import { Inter } from 'next/font/google';
+import { Inter, Lusitana } from 'next/font/google';
 
-// latinサブセットを読み込む
+// Interフォントのlatinサブセットを読み込む
 export const inter = Inter({ subsets: ['latin'] });
+
+// Lusitanaフォントのlatinサブセットを読み込む
+export const lusitana = Lusitana({ weight: '400', subsets: ['latin'] });
