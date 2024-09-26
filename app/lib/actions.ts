@@ -7,25 +7,52 @@ import { z } from 'zod';
  
 const FormSchema = z.object({
   id: z.string(),
-  customerId: z.string(),
-  amount: z.coerce.number(),
-  status: z.enum(['pending', 'paid']),
+  customerId: z.string({
+    invalid_type_error: 'Please select a customer.'
+  }),
+  amount: z.coerce
+    .number()
+    .gt(0, { message: 'Please emter am amount grater than $0.'}),
+  status: z.enum(['pending', 'paid'], {
+    invalid_type_error: 'Please select an invoice status.'
+  }),
   date: z.string(),
 });
+
+export type State = {
+  errors?: {
+    customerId?: string[];
+    amount?: string[];
+    status?: string[];
+  };
+  message?: string | null;
+};
  
 const CreateInvoice = FormSchema.omit({ id: true, date: true }); 
 const UpdateInvoice = FormSchema.omit({ id: true, date: true });
 
-export async function createInvoice(formData: FormData) {
-  const { customerId, amount, status } = CreateInvoice.parse({
+export async function createInvoice(prevState: State, formData: FormData) {
+  // Zodを使用してフォームフィールドのバリデーションを行う
+  const validatedFields = CreateInvoice.safeParse({
     customerId: formData.get('customerId'),
     amount: formData.get('amount'),
     status: formData.get('status'),
   });
  
+  // バリデーションに失敗した場合はエラーをすぐに返す。
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to Create Invoice.',
+    };
+  }
+ 
+  //  データベースに挿入するデータを準備する
+  const { customerId, amount, status } = validatedFields.data;
   const amountInCents = amount * 100;
   const date = new Date().toISOString().split('T')[0];
  
+  // データベースにデータを挿入
   try {
     await sql`
       INSERT INTO invoices (customer_id, amount, status, date)
@@ -33,10 +60,12 @@ export async function createInvoice(formData: FormData) {
     `;
   } catch (error) {
     return {
+      // データベースエラーが発生した場合は具体的なエラーメッセージを返す
       message: 'Database Error: Failed to Create Invoice.',
     };
   }
  
+  // 請求書ページのキャッシュをバリデーションし、ユーザーをリダイレクトする
   revalidatePath('/dashboard/invoices');
   redirect('/dashboard/invoices');
 }
