@@ -70,15 +70,31 @@ export async function createInvoice(prevState: State, formData: FormData) {
   redirect('/dashboard/invoices');
 }
 
-export async function updateInvoice(id: string, formData: FormData) {
-  const { customerId, amount, status } = UpdateInvoice.parse({
+export async function updateInvoice(
+  id: string,
+  prevState: State,
+  formData: FormData
+) {
+  // Zodを使用してフォームフィールドのバリデーションを行う
+  const validatedFields = UpdateInvoice.safeParse({
     customerId: formData.get('customerId'),
     amount: formData.get('amount'),
     status: formData.get('status'),
   });
  
+  // バリデーションに失敗した場合はエラーをすぐに返す。
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to Create Invoice.',
+    };
+  }
+ 
+  //  データベースに挿入するデータを準備する
+  const { customerId, amount, status } = validatedFields.data;
   const amountInCents = amount * 100;
  
+  // データベースのデータを更新
   try {
     await sql`
         UPDATE invoices
@@ -86,9 +102,11 @@ export async function updateInvoice(id: string, formData: FormData) {
         WHERE id = ${id}
       `;
   } catch (error) {
+      // データベースエラーが発生した場合は具体的なエラーメッセージを返す
     return { message: 'Database Error: Failed to Update Invoice.' };
   }
  
+  // 請求書ページのキャッシュをバリデーションし、ユーザーをリダイレクトする
   revalidatePath('/dashboard/invoices');
   redirect('/dashboard/invoices');
 }
